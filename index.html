@@ -3,7 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Currency Converter</title>
+    <title>RateWise - Currency Converter</title>
+    <meta name="application-name" content="RateWise" />
+    <meta
+      name="description"
+      content="RateWise is a currency converter for checking exchange rates and exploring rate history."
+    />
     <link rel="stylesheet" href="style.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   </head>
@@ -61,12 +66,20 @@
 
           <form id="reset-form" hidden>
             <h2>Reset your password</h2>
-            <p class="reset-description">Enter your email or phone number and we’ll explain the next steps.</p>
+            <p class="reset-description">Enter your email or phone number and choose a new password for this demo.</p>
             <label class="field" for="reset-identity">
               <span>Email or phone number</span>
               <input id="reset-identity" name="identity" type="text" autocomplete="username" placeholder="you@example.com or +1 555 123 4567" required />
             </label>
-            <button type="submit" class="convert-btn auth-submit">Continue</button>
+            <label class="field" for="reset-password">
+              <span>New password</span>
+              <input id="reset-password" name="password" type="password" autocomplete="new-password" placeholder="At least 6 characters" minlength="6" required />
+            </label>
+            <label class="field" for="reset-password-confirmation">
+              <span>Confirm new password</span>
+              <input id="reset-password-confirmation" name="passwordConfirmation" type="password" autocomplete="new-password" placeholder="Re-enter your new password" minlength="6" required />
+            </label>
+            <button type="submit" class="convert-btn auth-submit">Reset password</button>
             <button type="button" class="text-button back-to-login" id="back-to-login">Back to log in</button>
             <p id="reset-message" class="form-message" role="status"></p>
           </form>
@@ -129,6 +142,31 @@
               </select>
             </label>
           </div>
+
+          <div class="currency-filters" aria-label="Currency filters">
+            <label class="field filter-search" for="currency-search">
+              <span>Search currency</span>
+              <input id="currency-search" type="search" placeholder="Search by code or name" autocomplete="off" />
+            </label>
+            <label class="field" for="currency-region">
+              <span>Region</span>
+              <select id="currency-region">
+                <option value="all">All regions</option>
+                <option value="popular">Popular currencies</option>
+                <option value="asia">Asia</option>
+                <option value="europe">Europe</option>
+                <option value="americas">Americas</option>
+                <option value="middle-east">Middle East</option>
+                <option value="oceania">Oceania</option>
+              </select>
+            </label>
+            <label class="popular-filter" for="popular-only">
+              <input id="popular-only" type="checkbox" />
+              <span>Popular only</span>
+            </label>
+            <button type="button" class="reset-filter-btn" id="reset-filters">Reset</button>
+          </div>
+          <p id="currency-filter-status" class="filter-status" aria-live="polite"></p>
 
           <button type="button" class="convert-btn" id="convert-btn" onclick="convertCurrency()">Convert</button>
         </div>

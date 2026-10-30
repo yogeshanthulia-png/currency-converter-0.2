@@ -20,6 +20,61 @@ const CURRENCY_OPTIONS = {
   SAR: "SAR - Saudi Riyal"
 };
 
+const POPULAR_CURRENCIES = new Set(["USD", "EUR", "GBP", "INR", "JPY", "AUD", "CAD", "AED"]);
+const CURRENCY_REGIONS = {
+  USD: "americas", CAD: "americas", EUR: "europe", GBP: "europe", CHF: "europe", SEK: "europe",
+  INR: "asia", JPY: "asia", CNY: "asia", PKR: "asia", SGD: "asia",
+  AED: "middle-east", SAR: "middle-east", AUD: "oceania", NZD: "oceania"
+};
+
+function renderCurrencyFilters() {
+  const from = document.getElementById("from");
+  const to = document.getElementById("to");
+  const search = document.getElementById("currency-search");
+  const region = document.getElementById("currency-region");
+  const popularOnly = document.getElementById("popular-only");
+  const status = document.getElementById("currency-filter-status");
+
+  if (!from || !to || !search || !region || !popularOnly) return;
+
+  const query = search.value.trim().toLowerCase();
+  const selectedRegion = region.value;
+  const isPopularOnly = popularOnly.checked || selectedRegion === "popular";
+  const matchingEntries = Object.entries(CURRENCY_OPTIONS).filter(([code, label]) => {
+    const matchesSearch = !query || `${code} ${label}`.toLowerCase().includes(query);
+    const matchesRegion = selectedRegion === "all" || selectedRegion === "popular" || CURRENCY_REGIONS[code] === selectedRegion;
+    const matchesPopular = !isPopularOnly || POPULAR_CURRENCIES.has(code);
+    return matchesSearch && matchesRegion && matchesPopular;
+  });
+
+  [from, to].forEach((select) => {
+    const currentValue = select.value;
+    const entries = matchingEntries.some(([code]) => code === currentValue)
+      ? matchingEntries
+      : [[currentValue, CURRENCY_OPTIONS[currentValue] || currentValue], ...matchingEntries];
+
+    select.replaceChildren(...entries.map(([code, label]) => {
+      const option = new Option(label, code);
+      option.selected = code === currentValue;
+      return option;
+    }));
+  });
+
+  if (status) {
+    status.textContent = `${matchingEntries.length} ${matchingEntries.length === 1 ? "currency" : "currencies"} shown`;
+  }
+}
+
+function resetCurrencyFilters() {
+  const search = document.getElementById("currency-search");
+  const region = document.getElementById("currency-region");
+  const popularOnly = document.getElementById("popular-only");
+  if (search) search.value = "";
+  if (region) region.value = "all";
+  if (popularOnly) popularOnly.checked = false;
+  renderCurrencyFilters();
+}
+
 function safeText(selector, text) {
   const el = document.querySelector(selector);
   if (el) el.textContent = text;
@@ -266,11 +321,40 @@ document.addEventListener("DOMContentLoaded", () => {
   const loginMessage = document.getElementById("login-message");
   const resetMessage = document.getElementById("reset-message");
   const logoutButton = document.getElementById("logout-btn");
+  const currencySearch = document.getElementById("currency-search");
+  const currencyRegion = document.getElementById("currency-region");
+  const popularOnly = document.getElementById("popular-only");
+  const resetFilters = document.getElementById("reset-filters");
+
+  const normalizeIdentity = (value) => {
+    const trimmed = value.trim().toLowerCase();
+    if (trimmed.includes("@")) return trimmed;
+
+    let digits = trimmed.replace(/\D/g, "");
+    if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+    if (digits.length === 10) digits = `91${digits}`;
+    return `phone:${digits}`;
+  };
+
+  const getSavedAccounts = () => {
+    try {
+      return JSON.parse(localStorage.getItem("ratewise-demo-accounts") || "{}");
+    } catch {
+      return {};
+    }
+  };
+
+  const hashPassword = async (password) => {
+    const encoded = new TextEncoder().encode(password);
+    const buffer = await crypto.subtle.digest("SHA-256", encoded);
+    return Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  };
 
   const savedTheme = localStorage.getItem("currency-theme") || "dark";
   applyTheme(savedTheme);
   const isLoggedIn = sessionStorage.getItem("ratewise-demo-session") === "active";
   showConverter(isLoggedIn);
+  renderCurrencyFilters();
 
   if (themeToggle) {
     themeToggle.addEventListener("click", () => {
@@ -283,6 +367,10 @@ document.addEventListener("DOMContentLoaded", () => {
   if (amountField) amountField.addEventListener("input", convertCurrency);
   if (from) from.addEventListener("change", () => { convertCurrency(); loadRateGraph(); });
   if (to) to.addEventListener("change", () => { convertCurrency(); loadRateGraph(); });
+  if (currencySearch) currencySearch.addEventListener("input", renderCurrencyFilters);
+  if (currencyRegion) currencyRegion.addEventListener("change", renderCurrencyFilters);
+  if (popularOnly) popularOnly.addEventListener("change", renderCurrencyFilters);
+  if (resetFilters) resetFilters.addEventListener("click", resetCurrencyFilters);
   if (graphPeriod) graphPeriod.addEventListener("change", loadRateGraph);
   if (convertBtn) convertBtn.addEventListener("click", convertCurrency);
   if (swapBtn) swapBtn.addEventListener("click", swapCurrency);
@@ -321,7 +409,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   if (loginForm) {
-    loginForm.addEventListener("submit", (event) => {
+    loginForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const identity = document.getElementById("login-identity").value;
       const password = document.getElementById("login-password").value;
@@ -332,6 +420,12 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (!password) {
         loginMessage.textContent = "Enter your password.";
+        return;
+      }
+
+      const savedAccount = getSavedAccounts()[normalizeIdentity(identity)];
+      if (savedAccount && savedAccount.passwordHash !== await hashPassword(password)) {
+        loginMessage.textContent = "Incorrect password. Use Forgot password? to reset it.";
         return;
       }
 
@@ -353,16 +447,39 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (resetForm) {
-    resetForm.addEventListener("submit", (event) => {
+    resetForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const identity = document.getElementById("reset-identity").value;
+      const password = document.getElementById("reset-password").value;
+      const passwordConfirmation = document.getElementById("reset-password-confirmation").value;
 
       if (!isEmailOrPhone(identity)) {
         resetMessage.textContent = "Enter a valid email address or phone number.";
         return;
       }
 
-      resetMessage.textContent = "Password reset is not available until a secure account service is connected.";
+      if (password.length < 6) {
+        resetMessage.textContent = "Your new password must be at least 6 characters.";
+        return;
+      }
+
+      if (password !== passwordConfirmation) {
+        resetMessage.textContent = "The passwords do not match.";
+        return;
+      }
+
+      const accounts = getSavedAccounts();
+      accounts[normalizeIdentity(identity)] = {
+        passwordHash: await hashPassword(password),
+        updatedAt: new Date().toISOString()
+      };
+      localStorage.setItem("ratewise-demo-accounts", JSON.stringify(accounts));
+      resetForm.hidden = true;
+      loginForm.hidden = false;
+      document.getElementById("login-identity").value = identity.trim();
+      document.getElementById("login-password").value = "";
+      loginMessage.textContent = "Password reset successfully. You can now log in with your new password.";
+      document.getElementById("login-password")?.focus();
     });
   }
 
